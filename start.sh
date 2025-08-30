@@ -9,7 +9,7 @@
 export Server_Dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 
 # 加载.env变量文件
-source $Server_Dir/.env
+[ -f "$Server_Dir/.env" ] && source "$Server_Dir/.env"
 
 # 给二进制启动程序、脚本等添加可执行权限
 chmod +x $Server_Dir/bin/*
@@ -23,6 +23,9 @@ chmod +x $Server_Dir/tools/subconverter/subconverter
 Conf_Dir="$Server_Dir/conf"
 Temp_Dir="$Server_Dir/temp"
 Log_Dir="$Server_Dir/logs"
+
+# Ensure necessary directories exist
+mkdir -p "$Conf_Dir" "$Temp_Dir" "$Log_Dir"
 
 # 将 CLASH_URL 变量的值赋给 URL 变量，并检查 CLASH_URL 是否为空
 URL=${CLASH_URL:?Error: CLASH_URL variable is not set or empty}
@@ -161,21 +164,23 @@ echo -e '\n正在启动Clash服务...'
 Text5="服务启动成功！"
 Text6="服务启动失败！"
 if [[ $CpuArch =~ "x86_64" || $CpuArch =~ "amd64"  ]]; then
-	nohup $Server_Dir/bin/clash-linux-amd64 -d $Conf_Dir &> $Log_Dir/clash.log &
-	ReturnStatus=$?
-	if_success $Text5 $Text6 $ReturnStatus
+	CLASH_BIN="$Server_Dir/bin/clash-linux-amd64"
 elif [[ $CpuArch =~ "aarch64" ||  $CpuArch =~ "arm64" ]]; then
-	nohup $Server_Dir/bin/clash-linux-arm64 -d $Conf_Dir &> $Log_Dir/clash.log &
-	ReturnStatus=$?
-	if_success $Text5 $Text6 $ReturnStatus
+	CLASH_BIN="$Server_Dir/bin/clash-linux-arm64"
 elif [[ $CpuArch =~ "armv7" ]]; then
-	nohup $Server_Dir/bin/clash-linux-armv7 -d $Conf_Dir &> $Log_Dir/clash.log &
-	ReturnStatus=$?
-	if_success $Text5 $Text6 $ReturnStatus
+	CLASH_BIN="$Server_Dir/bin/clash-linux-armv7"
 else
 	echo -e "\033[31m\n[ERROR] Unsupported CPU Architecture！\033[0m"
 	exit 1
 fi
+
+nohup "$CLASH_BIN" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
+ReturnStatus=$?
+CLASH_PID=$!
+if [ $ReturnStatus -eq 0 ] && kill -0 "$CLASH_PID" 2>/dev/null; then
+	echo "$CLASH_PID" > "$Temp_Dir/clash.pid"
+fi
+if_success $Text5 $Text6 $ReturnStatus
 
 # Output Dashboard access address and Secret
 echo ''
@@ -183,16 +188,21 @@ echo -e "Clash Dashboard 访问地址: http://<ip>:9090/ui"
 echo -e "Secret: ${Secret}"
 echo ''
 
-# 添加环境变量(root权限)
-cat>/etc/profile.d/clash.sh<<EOF
+# 添加环境变量（根据权限：root 写入系统，普通用户写入用户级文件）
+ENV_FILE="$HOME/.clash_proxy_env.sh"
+
+# 创建目录（/etc/profile.d 通常已存在；用户文件位于 $HOME）
+mkdir -p "$(dirname "$ENV_FILE")" 2>/dev/null || true
+
+cat>"$ENV_FILE"<<'EOF'
 # 开启系统代理
 function proxy_on() {
 	export http_proxy=http://127.0.0.1:7890
 	export https_proxy=http://127.0.0.1:7890
 	export no_proxy=127.0.0.1,localhost
-    	export HTTP_PROXY=http://127.0.0.1:7890
-    	export HTTPS_PROXY=http://127.0.0.1:7890
- 	export NO_PROXY=127.0.0.1,localhost
+	export HTTP_PROXY=http://127.0.0.1:7890
+	export HTTPS_PROXY=http://127.0.0.1:7890
+	export NO_PROXY=127.0.0.1,localhost
 	echo -e "\033[32m[√] 已开启代理\033[0m"
 }
 
@@ -201,13 +211,33 @@ function proxy_off(){
 	unset http_proxy
 	unset https_proxy
 	unset no_proxy
-  	unset HTTP_PROXY
+	unset HTTP_PROXY
 	unset HTTPS_PROXY
 	unset NO_PROXY
 	echo -e "\033[31m[×] 已关闭代理\033[0m"
 }
 EOF
 
-echo -e "请执行以下命令加载环境变量: source /etc/profile.d/clash.sh\n"
+# 非 root 用户：将自动在 ~/.bashrc 中添加一次性 source 行，便于后续新终端自动生效
+RC_UPDATED=0
+BASHRC="$HOME/.bashrc"
+# 确保 .bashrc 存在
+[ -f "$BASHRC" ] || touch "$BASHRC"
+# 仅当未存在时追加，避免重复
+if ! grep -Fq ".clash_proxy_env.sh" "$BASHRC" 2>/dev/null; then
+	{
+		echo ""
+		echo "# Load Clash proxy helpers (added by clash-for-linux/start.sh)"
+		echo "[ -f \"$HOME/.clash_proxy_env.sh\" ] && source \"$HOME/.clash_proxy_env.sh\""
+	} >> "$BASHRC"
+	RC_UPDATED=1
+fi
+
+if [[ $RC_UPDATED -eq 1 ]]; then
+	echo -e "已自动写入 ~/.bashrc，新开一个终端即可直接使用 proxy_on/proxy_off。"
+	echo -e "当前会话如需立即生效，可执行: source ${ENV_FILE}\n"
+else
+	echo -e "请执行以下命令加载环境变量: source ${ENV_FILE}\n"
+fi
 echo -e "请执行以下命令开启系统代理: proxy_on\n"
 echo -e "若要临时关闭系统代理，请执行: proxy_off\n"
