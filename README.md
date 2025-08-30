@@ -1,5 +1,3 @@
-[TOC]
-
 # 项目介绍
 
 此项目是通过使用开源项目[clash](https://github.com/Dreamacro/clash)作为核心程序，再结合脚本实现简单的代理功能。
@@ -10,14 +8,14 @@
 
 # 使用须知
 
-- 运行本项目建议使用root用户，或者使用 sudo 提权。
+- 运行本项目不需要 root 或 sudo，脚本仅修改当前用户环境并保持无特权运行。
 - 使用过程中如遇到问题，请优先查已有的 [issues](https://github.com/wanhebin/clash-for-linux/issues)。
 - 在进行issues提交前，请替换提交内容中是敏感信息（例如：订阅地址）。
 - 本项目是基于 [clash](https://github.com/Dreamacro/clash) 、[yacd](https://github.com/haishanh/yacd) 进行的配置整合，关于clash、yacd的详细配置请去原项目查看。
 - 此项目不提供任何订阅信息，请自行准备Clash订阅地址。
 - 运行前请手动更改`.env`文件中的`CLASH_URL`变量值，否则无法正常运行。
 - 当前在RHEL系列和Debian系列Linux系统中测试过，其他系列可能需要适当修改脚本。
-- 支持 x86_64/aarch64 平台
+- 支持 x86_64/aarch64/armv7 平台
 
 > **注意**：当你在使用此项目时，遇到任何无法独自解决的问题请优先前往 [Issues](https://github.com/wanhebin/clash-for-linux/issues) 寻找解决方法。由于空闲时间有限，后续将不再对Issues中 “已经解答”、“已有解决方案” 的问题进行重复性的回答。
 
@@ -54,10 +52,10 @@ $ vim .env
 $ cd clash-for-linux
 ```
 
-- 运行启动脚本
+- 运行启动脚本（无需 sudo）
 
 ```bash
-$ sudo bash start.sh
+$ bash start.sh
 
 正在检测订阅地址...
 Clash订阅地址可访问！                                      [  OK  ]
@@ -71,7 +69,8 @@ Clash订阅地址可访问！                                      [  OK  ]
 Clash Dashboard 访问地址：http://<ip>:9090/ui
 Secret：xxxxxxxxxxxxx
 
-请执行以下命令加载环境变量: source /etc/profile.d/clash.sh
+已自动写入 ~/.bashrc，新开一个终端即可直接使用 proxy_on/proxy_off。
+当前会话如需立即生效，可执行: source $HOME/.clash_proxy_env.sh
 
 请执行以下命令开启系统代理: proxy_on
 
@@ -80,18 +79,16 @@ Secret：xxxxxxxxxxxxx
 ```
 
 ```bash
-$ source /etc/profile.d/clash.sh
+$ source ~/.clash_proxy_env.sh
 $ proxy_on
 ```
 
-- 检查服务端口
+- 检查服务端口（任选其一）
 
 ```bash
+$ ss -tln | grep -E '9090|789.'
+$ # 或
 $ netstat -tln | grep -E '9090|789.'
-tcp        0      0 127.0.0.1:9090          0.0.0.0:*               LISTEN     
-tcp6       0      0 :::7890                 :::*                    LISTEN     
-tcp6       0      0 :::7891                 :::*                    LISTEN     
-tcp6       0      0 :::7892                 :::*                    LISTEN
 ```
 
 - 检查环境变量
@@ -102,16 +99,22 @@ http_proxy=http://127.0.0.1:7890
 https_proxy=http://127.0.0.1:7890
 ```
 
-以上步鄹如果正常，说明服务clash程序启动成功，现在就可以体验高速下载github资源了。
+以上步骤如果正常，说明服务 clash 程序启动成功，现在就可以体验高速下载 GitHub 资源了。
 
 <br>
 
 ## 重启程序
 
-如果需要对Clash配置进行修改，请修改 `conf/config.yaml` 文件。然后运行 `restart.sh` 脚本进行重启。
+如果需要对 Clash 配置进行修改，请编辑 `conf/config.yaml` 文件。
 
-> **注意：**
-> 重启脚本 `restart.sh` 不会更新订阅信息。
+手动重启步骤：
+
+```bash
+$ bash shutdown.sh
+$ bash start.sh
+```
+
+提示：重启不会保留旧的代理环境变量文件内容；再次启动会重新写入用户环境文件，并拉取/处理订阅配置。
 
 <br>
 
@@ -123,10 +126,10 @@ https_proxy=http://127.0.0.1:7890
 $ cd clash-for-linux
 ```
 
-- 关闭服务
+- 关闭服务（无需 sudo）
 
 ```bash
-$ sudo bash shutdown.sh
+$ bash shutdown.sh
 
 服务关闭成功，请执行以下命令关闭系统代理：proxy_off
 
@@ -136,7 +139,9 @@ $ sudo bash shutdown.sh
 $ proxy_off
 ```
 
-然后检查程序端口、进程以及环境变量`http_proxy|https_proxy`，若都没则说明服务正常关闭。
+该脚本会自动移除在 `~/.bashrc` 中添加的加载行并清空 `~/.clash_proxy_env.sh`。
+
+然后检查程序端口、进程以及环境变量 `http_proxy|https_proxy`，若都没则说明服务正常关闭。
 
 
 <br>
