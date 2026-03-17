@@ -1,176 +1,154 @@
-# 项目介绍
+# clash-for-linux
 
-此项目是通过使用开源项目[clash](https://github.com/Dreamacro/clash)作为核心程序，再结合脚本实现简单的代理功能。
+基于 [mihomo](https://github.com/MetaCubeX/mihomo)（原 Clash.Meta）内核，通过脚本在 Linux 服务器上快速部署代理服务。无需 root 权限，适用于加速 GitHub 下载、访问国外资源等场景。
 
-主要是为了解决我们在服务器上下载GitHub等一些国外资源速度慢的问题。
+## 特性
 
-<br>
+- 使用 mihomo 内核，支持 Trojan/WebSocket/VMess/VLESS/SS 等主流协议
+- 无需 root，仅修改当前用户环境
+- 一键启动/关闭，自动注入 `proxy_on` / `proxy_off` 快捷命令
+- 内置 [YACD](https://github.com/haishanh/yacd) Dashboard，浏览器可视化管理
+- 支持 x86_64 / aarch64 / armv7 架构
 
-# 使用须知
+## 适用环境
 
-- 运行本项目不需要 root 或 sudo，脚本仅修改当前用户环境并保持无特权运行。
-- 使用过程中如遇到问题，请优先查已有的 [issues](https://github.com/wanhebin/clash-for-linux/issues)。
-- 在进行issues提交前，请替换提交内容中是敏感信息（例如：订阅地址）。
-- 本项目是基于 [clash](https://github.com/Dreamacro/clash) 、[yacd](https://github.com/haishanh/yacd) 进行的配置整合，关于clash、yacd的详细配置请去原项目查看。
-- 此项目不提供任何订阅信息，请自行准备Clash订阅地址。
-- 运行前请手动更改`.env`文件中的`CLASH_URL`变量值，否则无法正常运行。
-- 当前在RHEL系列和Debian系列Linux系统中测试过，其他系列可能需要适当修改脚本。
-- 支持 x86_64/aarch64/armv7 平台
+- RHEL 系列（CentOS、Fedora 等）
+- Debian 系列（Ubuntu、Debian、Linux Mint 等）
+- 其他支持 bash 的 Linux 发行版
 
-> **注意**：当你在使用此项目时，遇到任何无法独自解决的问题请优先前往 [Issues](https://github.com/wanhebin/clash-for-linux/issues) 寻找解决方法。由于空闲时间有限，后续将不再对Issues中 “已经解答”、“已有解决方案” 的问题进行重复性的回答。
+## 快速开始
 
-<br>
-
-# 使用教程
-
-## 下载项目
-
-下载项目
+### 1. 克隆项目
 
 ```bash
-$ git clone https://github.com/wanhebin/clash-for-linux.git
+git clone https://github.com/wanhebin/clash-for-linux.git
+cd clash-for-linux
 ```
 
-进入到项目目录，编辑`.env`文件，修改变量`CLASH_URL`的值。
+### 2. 配置订阅地址
+
+编辑 `.env` 文件，填入你的订阅链接：
 
 ```bash
-$ cd clash-for-linux
-$ vim .env
-```
-
-> **注意：** `.env` 文件中的变量 `CLASH_SECRET` 为自定义 Clash Secret，值为空时，脚本将自动生成随机字符串。
-
-<br>
-
-## 启动程序
-
-直接运行脚本文件`start.sh`
-
-- 进入项目目录
-
-```bash
-$ cd clash-for-linux
-```
-
-- 运行启动脚本（无需 sudo）
-
-```bash
-$ bash start.sh
-
-正在检测订阅地址...
-Clash订阅地址可访问！                                      [  OK  ]
-
-正在下载Clash配置文件...
-配置文件config.yaml下载成功！                              [  OK  ]
-
-正在启动Clash服务...
-服务启动成功！                                             [  OK  ]
-
-Clash Dashboard 访问地址：http://<ip>:9090/ui
-Secret：xxxxxxxxxxxxx
-
-已自动写入 ~/.bashrc，新开一个终端即可直接使用 proxy_on/proxy_off。
-当前会话如需立即生效，可执行: source $HOME/.clash_proxy_env.sh
-
-请执行以下命令开启系统代理: proxy_on
-
-若要临时关闭系统代理，请执行: proxy_off
-
+vim .env
 ```
 
 ```bash
-$ source ~/.clash_proxy_env.sh
-$ proxy_on
+# 必填：你的代理订阅地址
+export CLASH_URL='https://your-subscription-url'
+# 可选：自定义 Dashboard Secret，留空自动生成
+export CLASH_SECRET=''
 ```
 
-- 检查服务端口（任选其一）
+### 3. 启动服务
 
 ```bash
-$ ss -tln | grep -E '9090|789.'
-$ # 或
-$ netstat -tln | grep -E '9090|789.'
+bash start.sh
 ```
 
-- 检查环境变量
+启动成功后会输出 Dashboard 地址和 Secret。首次运行会自动将 `proxy_on`/`proxy_off` 注入 `~/.bashrc`。
+
+### 4. 开启代理
 
 ```bash
-$ env | grep -E 'http_proxy|https_proxy'
-http_proxy=http://127.0.0.1:7890
-https_proxy=http://127.0.0.1:7890
+# 首次在当前终端需要手动 source
+source ~/.clash_proxy_env.sh
+# 开启代理
+proxy_on
 ```
 
-以上步骤如果正常，说明服务 clash 程序启动成功，现在就可以体验高速下载 GitHub 资源了。
-
-<br>
-
-## 重启程序
-
-如果需要对 Clash 配置进行修改，请编辑 `conf/config.yaml` 文件。
-
-手动重启步骤：
+验证代理是否生效：
 
 ```bash
-$ bash shutdown.sh
-$ bash start.sh
+curl ipinfo.io
 ```
 
-提示：重启不会保留旧的代理环境变量文件内容；再次启动会重新写入用户环境文件，并拉取/处理订阅配置。
+如果返回的 IP 不是你本机的，说明代理已生效。
 
-<br>
+### 5. 关闭代理
 
-## 停止程序
-
-- 进入项目目录
+临时关闭（仅当前终端）：
 
 ```bash
-$ cd clash-for-linux
+proxy_off
 ```
 
-- 关闭服务（无需 sudo）
+完全停止服务：
 
 ```bash
-$ bash shutdown.sh
+bash shutdown.sh
+proxy_off
+```
 
-服务关闭成功，请执行以下命令关闭系统代理：proxy_off
+## Dashboard
+
+启动后可通过浏览器访问 Clash Dashboard 管理节点和规则：
+
+- 地址：`http://<服务器IP>:9090/ui`
+- 在 `API Base URL` 输入 `http://<服务器IP>:9090`
+- 在 `Secret` 输入启动时输出的密钥
+
+> 注意：默认 Dashboard API 仅监听 `127.0.0.1`，如需远程访问请修改 `temp/templete_config.yaml` 中的 `external-controller` 为 `0.0.0.0:9090`。
+
+## 项目结构
 
 ```
+clash-for-linux/
+├── .env                          # 订阅地址和 Secret 配置
+├── start.sh                      # 启动脚本
+├── shutdown.sh                   # 停止脚本
+├── bin/                          # mihomo 二进制文件
+│   ├── clash-linux-amd64
+│   ├── clash-linux-arm64
+│   └── clash-linux-armv7
+├── conf/                         # 运行时配置（自动生成）
+│   ├── config.yaml
+│   └── Country.mmdb
+├── dashboard/public/             # YACD Dashboard 静态资源
+├── logs/                         # 日志目录
+├── scripts/
+│   └── get_cpu_arch.sh           # CPU 架构检测
+└── temp/
+    ├── templete_config.yaml      # 配置模板（可自定义端口等）
+    └── ...                       # 临时文件（自动生成）
+```
+
+## 自定义配置
+
+编辑 `temp/templete_config.yaml` 可修改：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `port` | 7890 | HTTP 代理端口 |
+| `socks-port` | 7891 | SOCKS5 代理端口 |
+| `allow-lan` | true | 是否允许局域网设备使用代理 |
+| `mode` | rule | 代理模式：rule / global / direct |
+| `log-level` | info | 日志级别：silent / info / warning / error / debug |
+| `external-controller` | 127.0.0.1:9090 | Dashboard API 监听地址 |
+
+修改后重启生效：
 
 ```bash
-$ proxy_off
+bash shutdown.sh && bash start.sh
 ```
 
-该脚本会自动移除在 `~/.bashrc` 中添加的加载行并清空 `~/.clash_proxy_env.sh`。
+## 常见问题
 
-然后检查程序端口、进程以及环境变量 `http_proxy|https_proxy`，若都没则说明服务正常关闭。
+**Q: 脚本报错 `-en [ OK ]`？**
 
+部分系统默认 shell 为 `dash`，请使用 `bash start.sh` 运行。
 
-<br>
+**Q: 服务启动成功但代理不通？**
 
-## Clash Dashboard
+1. 检查端口是否在监听：`ss -tln | grep -E '9090|789.'`
+2. 检查日志：`tail -f logs/clash.log`
+3. 确认订阅地址有效且节点可用
 
-- 访问 Clash Dashboard
+**Q: 如何更换订阅？**
 
-通过浏览器访问 `start.sh` 执行成功后输出的地址，例如：http://192.168.0.1:9090/ui
+修改 `.env` 中的 `CLASH_URL`，然后重启：`bash shutdown.sh && bash start.sh`
 
-- 登录管理界面
+## 致谢
 
-在`API Base URL`一栏中输入：http://\<ip\>:9090 ，在`Secret(optional)`一栏中输入启动成功后输出的Secret。
-
-点击Add并选择刚刚输入的管理界面地址，之后便可在浏览器上进行一些配置。
-
-- 更多教程
-
-此 Clash Dashboard 使用的是[yacd](https://github.com/haishanh/yacd)项目，详细使用方法请移步到yacd上查询。
-
-
-<br>
-
-# 常见问题
-
-1. 部分Linux系统默认的 shell `/bin/sh` 被更改为 `dash`，运行脚本会出现报错（报错内容一般会有 `-en [ OK ]`）。建议使用 `bash xxx.sh` 运行脚本。
-
-2. 部分用户在UI界面找不到代理节点，基本上是因为厂商提供的clash配置文件是经过base64编码的，且配置文件格式不符合clash配置标准。
-
-   目前此项目已集成自动识别和转换clash配置文件的功能。如果依然无法使用，则需要通过自建或者第三方平台（不推荐，有泄露风险）对订阅地址转换。
-   
-3. 程序日志中出现`error: unsupported rule type RULE-SET`报错，解决方法查看官方[WIKI](https://github.com/Dreamacro/clash/wiki/FAQ#error-unsupported-rule-type-rule-set)
+- [mihomo (Clash.Meta)](https://github.com/MetaCubeX/mihomo)
+- [YACD Dashboard](https://github.com/haishanh/yacd)

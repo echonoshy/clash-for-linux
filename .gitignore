@@ -1,0 +1,21 @@
+# 敏感配置（含订阅地址）
+.env
+
+# 运行时生成的配置和缓存
+conf/config.yaml
+conf/cache.db
+
+# 日志
+logs/
+
+# 临时文件（模板除外）
+temp/clash.yaml
+temp/clash_config.yaml
+temp/clash.pid
+temp/config.yaml
+temp/proxy.txt
+
+# IDE / 工具
+.claude/
+.vscode/
+.idea/

@@ -1,22 +1,13 @@
 #!/bin/bash
 
-# 加载系统函数库(Only for RHEL Linux)
-# [ -f /etc/init.d/functions ] && source /etc/init.d/functions
+#################### 脚本初始化 ####################
 
-#################### 脚本初始化任务 ####################
+Server_Dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 
-# 获取脚本工作目录绝对路径
-export Server_Dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
-
-# 加载.env变量文件
 [ -f "$Server_Dir/.env" ] && source "$Server_Dir/.env"
 
-# 给二进制启动程序、脚本等添加可执行权限
 chmod +x $Server_Dir/bin/*
 chmod +x $Server_Dir/scripts/*
-chmod +x $Server_Dir/tools/subconverter/subconverter
-
-
 
 #################### 变量设置 ####################
 
@@ -24,20 +15,13 @@ Conf_Dir="$Server_Dir/conf"
 Temp_Dir="$Server_Dir/temp"
 Log_Dir="$Server_Dir/logs"
 
-# Ensure necessary directories exist
 mkdir -p "$Conf_Dir" "$Temp_Dir" "$Log_Dir"
 
-# 将 CLASH_URL 变量的值赋给 URL 变量，并检查 CLASH_URL 是否为空
 URL=${CLASH_URL:?Error: CLASH_URL variable is not set or empty}
-
-# 获取 CLASH_SECRET 值，如果不存在则生成一个随机数
 Secret=${CLASH_SECRET:-$(openssl rand -hex 32)}
-
-
 
 #################### 函数定义 ####################
 
-# 自定义action函数，实现通用action功能
 success() {
 	echo -en "\\033[60G[\\033[1;32m  OK  \\033[0;39m]\r"
 	return 0
@@ -46,13 +30,11 @@ success() {
 failure() {
 	local rc=$?
 	echo -en "\\033[60G[\\033[1;31mFAILED\\033[0;39m]\r"
-	[ -x /bin/plymouth ] && /bin/plymouth --details
 	return $rc
 }
 
 action() {
 	local STRING rc
-
 	STRING=$1
 	echo -n "$STRING "
 	shift
@@ -62,7 +44,6 @@ action() {
 	return $rc
 }
 
-# 判断命令是否正常执行 函数
 if_success() {
 	local ReturnStatus=$3
 	if [ $ReturnStatus -eq 0 ]; then
@@ -73,129 +54,79 @@ if_success() {
 	fi
 }
 
-
-
 #################### 任务执行 ####################
 
-## 获取CPU架构信息
-# Source the script to get CPU architecture
+## 获取 CPU 架构
 source $Server_Dir/scripts/get_cpu_arch.sh
 
-# Check if we obtained CPU architecture
 if [[ -z "$CpuArch" ]]; then
 	echo "Failed to obtain CPU architecture"
 	exit 1
 fi
 
+## 清除可能残留的代理环境变量，避免干扰订阅下载
+unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
-## 临时取消环境变量
-unset http_proxy
-unset https_proxy
-unset no_proxy
-unset HTTP_PROXY
-unset HTTPS_PROXY
-unset NO_PROXY
-
-
-## Clash 订阅地址检测及配置文件下载
-# 检查url是否有效
+## 检测订阅地址
 echo -e '\n正在检测订阅地址...'
-Text1="Clash订阅地址可访问！"
-Text2="Clash订阅地址不可访问！"
-#curl -o /dev/null -s -m 10 --connect-timeout 10 -w %{http_code} $URL | grep '[23][0-9][0-9]' &>/dev/null
 curl -o /dev/null -L -k -sS --retry 5 -m 10 --connect-timeout 10 -w "%{http_code}" $URL | grep -E '^[23][0-9]{2}$' &>/dev/null
-ReturnStatus=$?
-if_success $Text1 $Text2 $ReturnStatus
+if_success "订阅地址可访问！" "订阅地址不可访问！" $?
 
-# 拉取更新config.yml文件
-echo -e '\n正在下载Clash配置文件...'
-Text3="配置文件config.yaml下载成功！"
-Text4="配置文件config.yaml下载失败，退出启动！"
-
-# 尝试使用curl进行下载
-curl -L -k -sS --retry 5 -m 10 -o $Temp_Dir/clash.yaml $URL
+## 下载订阅配置（使用 clash-meta UA 获取 mihomo 兼容的完整配置）
+echo -e '\n正在下载配置文件...'
+curl -L -k -sS --retry 5 -m 30 -A "clash-meta" -o $Temp_Dir/clash.yaml $URL
 ReturnStatus=$?
 if [ $ReturnStatus -ne 0 ]; then
-	# 如果使用curl下载失败，尝试使用wget进行下载
-	for i in {1..10}
-	do
-		wget -q --no-check-certificate -O $Temp_Dir/clash.yaml $URL
+	for i in {1..10}; do
+		wget -q --no-check-certificate -U "clash-meta" -O $Temp_Dir/clash.yaml $URL
 		ReturnStatus=$?
-		if [ $ReturnStatus -eq 0 ]; then
-			break
-		else
-			continue
-		fi
+		[ $ReturnStatus -eq 0 ] && break
 	done
 fi
-if_success $Text3 $Text4 $ReturnStatus
+if_success "配置文件下载成功！" "配置文件下载失败，退出启动！" $ReturnStatus
 
-# 重命名clash配置文件
-\cp -a $Temp_Dir/clash.yaml $Temp_Dir/clash_config.yaml
-
-
-## 判断订阅内容是否符合clash配置文件标准，尝试转换（当前不支持对 x86_64 以外的CPU架构服务器进行clash配置文件检测和转换，此功能将在后续添加）
-if [[ $CpuArch =~ "x86_64" || $CpuArch =~ "amd64"  ]]; then
-	echo -e '\n判断订阅内容是否符合clash配置文件标准:'
-	bash $Server_Dir/scripts/clash_profile_conversion.sh
-	sleep 3
-fi
-
-
-## Clash 配置文件重新格式化及配置
-# 取出代理相关配置 
-#sed -n '/^proxies:/,$p' $Temp_Dir/clash.yaml > $Temp_Dir/proxy.txt
-sed -n '/^proxies:/,$p' $Temp_Dir/clash_config.yaml > $Temp_Dir/proxy.txt
-
-# 合并形成新的config.yaml
+## 组装最终配置：模板头部 + 订阅中的代理/规则
+sed -n '/^proxies:/,$p' $Temp_Dir/clash.yaml > $Temp_Dir/proxy.txt
 cat $Temp_Dir/templete_config.yaml > $Temp_Dir/config.yaml
 cat $Temp_Dir/proxy.txt >> $Temp_Dir/config.yaml
 \cp $Temp_Dir/config.yaml $Conf_Dir/
 
-# Configure Clash Dashboard
-Work_Dir=$(cd $(dirname $0); pwd)
-Dashboard_Dir="${Work_Dir}/dashboard/public"
+## 配置 Dashboard 路径和 Secret
+Dashboard_Dir="$Server_Dir/dashboard/public"
 sed -ri "s@^# external-ui:.*@external-ui: ${Dashboard_Dir}@g" $Conf_Dir/config.yaml
 sed -r -i '/^secret: /s@(secret: ).*@\1'${Secret}'@g' $Conf_Dir/config.yaml
 
-
-## 启动Clash服务
-echo -e '\n正在启动Clash服务...'
-Text5="服务启动成功！"
-Text6="服务启动失败！"
-if [[ $CpuArch =~ "x86_64" || $CpuArch =~ "amd64"  ]]; then
-	CLASH_BIN="$Server_Dir/bin/clash-linux-amd64"
-elif [[ $CpuArch =~ "aarch64" ||  $CpuArch =~ "arm64" ]]; then
-	CLASH_BIN="$Server_Dir/bin/clash-linux-arm64"
+## 选择并启动 mihomo
+echo -e '\n正在启动 mihomo 服务...'
+if [[ $CpuArch =~ "x86_64" || $CpuArch =~ "amd64" ]]; then
+	MIHOMO_BIN="$Server_Dir/bin/clash-linux-amd64"
+elif [[ $CpuArch =~ "aarch64" || $CpuArch =~ "arm64" ]]; then
+	MIHOMO_BIN="$Server_Dir/bin/clash-linux-arm64"
 elif [[ $CpuArch =~ "armv7" ]]; then
-	CLASH_BIN="$Server_Dir/bin/clash-linux-armv7"
+	MIHOMO_BIN="$Server_Dir/bin/clash-linux-armv7"
 else
-	echo -e "\033[31m\n[ERROR] Unsupported CPU Architecture！\033[0m"
+	echo -e "\033[31m\n[ERROR] Unsupported CPU Architecture: $CpuArch\033[0m"
 	exit 1
 fi
 
-nohup "$CLASH_BIN" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
+SAFE_PATHS="$Server_Dir" nohup "$MIHOMO_BIN" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
 ReturnStatus=$?
-CLASH_PID=$!
-if [ $ReturnStatus -eq 0 ] && kill -0 "$CLASH_PID" 2>/dev/null; then
-	echo "$CLASH_PID" > "$Temp_Dir/clash.pid"
+MIHOMO_PID=$!
+if [ $ReturnStatus -eq 0 ] && kill -0 "$MIHOMO_PID" 2>/dev/null; then
+	echo "$MIHOMO_PID" > "$Temp_Dir/clash.pid"
 fi
-if_success $Text5 $Text6 $ReturnStatus
+if_success "服务启动成功！" "服务启动失败！" $ReturnStatus
 
-# Output Dashboard access address and Secret
+## 输出访问信息
 echo ''
 echo -e "Clash Dashboard 访问地址: http://<ip>:9090/ui"
 echo -e "Secret: ${Secret}"
 echo ''
 
-# 添加环境变量（根据权限：root 写入系统，普通用户写入用户级文件）
+## 写入 proxy_on / proxy_off 快捷函数
 ENV_FILE="$HOME/.clash_proxy_env.sh"
 
-# 创建目录（/etc/profile.d 通常已存在；用户文件位于 $HOME）
-mkdir -p "$(dirname "$ENV_FILE")" 2>/dev/null || true
-
 cat>"$ENV_FILE"<<'EOF'
-# 开启系统代理
 function proxy_on() {
 	export http_proxy=http://127.0.0.1:7890
 	export https_proxy=http://127.0.0.1:7890
@@ -206,34 +137,21 @@ function proxy_on() {
 	echo -e "\033[32m[√] 已开启代理\033[0m"
 }
 
-# 关闭系统代理
 function proxy_off(){
-	unset http_proxy
-	unset https_proxy
-	unset no_proxy
-	unset HTTP_PROXY
-	unset HTTPS_PROXY
-	unset NO_PROXY
+	unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 	echo -e "\033[31m[×] 已关闭代理\033[0m"
 }
 EOF
 
-# 非 root 用户：将自动在 ~/.bashrc 中添加一次性 source 行，便于后续新终端自动生效
-RC_UPDATED=0
+## 自动注入 ~/.bashrc（仅首次）
 BASHRC="$HOME/.bashrc"
-# 确保 .bashrc 存在
 [ -f "$BASHRC" ] || touch "$BASHRC"
-# 仅当未存在时追加，避免重复
 if ! grep -Fq ".clash_proxy_env.sh" "$BASHRC" 2>/dev/null; then
 	{
 		echo ""
 		echo "# Load Clash proxy helpers (added by clash-for-linux/start.sh)"
 		echo "[ -f \"$HOME/.clash_proxy_env.sh\" ] && source \"$HOME/.clash_proxy_env.sh\""
 	} >> "$BASHRC"
-	RC_UPDATED=1
-fi
-
-if [[ $RC_UPDATED -eq 1 ]]; then
 	echo -e "已自动写入 ~/.bashrc，新开一个终端即可直接使用 proxy_on/proxy_off。"
 	echo -e "当前会话如需立即生效，可执行: source ${ENV_FILE}\n"
 else
