@@ -74,11 +74,11 @@ if_success "订阅地址可访问！" "订阅地址不可访问！" $?
 
 ## 下载订阅配置（使用 clash-meta UA 获取 mihomo 兼容的完整配置）
 echo -e '\n正在下载配置文件...'
-curl -L -k -sS --retry 5 -m 30 -A "clash-meta" -o $Temp_Dir/clash.yaml $URL
+curl -L -k -sS --retry 5 -m 30 -A "mihomo/1.19.21" -o $Temp_Dir/clash.yaml $URL
 ReturnStatus=$?
 if [ $ReturnStatus -ne 0 ]; then
 	for i in {1..10}; do
-		wget -q --no-check-certificate -U "clash-meta" -O $Temp_Dir/clash.yaml $URL
+		wget -q --no-check-certificate -U "mihomo/1.19.21" -O $Temp_Dir/clash.yaml $URL
 		ReturnStatus=$?
 		[ $ReturnStatus -eq 0 ] && break
 	done
