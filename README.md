@@ -84,11 +84,11 @@ proxy_off
 
 启动后可通过浏览器访问 Clash Dashboard 管理节点和规则：
 
-- 地址：`http://<服务器IP>:9090/ui`
-- 在 `API Base URL` 输入 `http://<服务器IP>:9090`
+- 地址：`http://<服务器IP>:9091/ui`
+- 在 `API Base URL` 输入 `http://<服务器IP>:9091`
 - 在 `Secret` 输入启动时输出的密钥
 
-> 注意：默认 Dashboard API 仅监听 `127.0.0.1`，如需远程访问请修改 `temp/templete_config.yaml` 中的 `external-controller` 为 `0.0.0.0:9090`。
+> 注意：默认 Dashboard API 仅监听 `127.0.0.1`，如需远程访问请修改 `temp/templete_config.yaml` 中的 `external-controller` 为 `0.0.0.0:9091`。
 
 ## 项目结构
 
@@ -119,12 +119,12 @@ clash-for-linux/
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `port` | 7890 | HTTP 代理端口 |
-| `socks-port` | 7891 | SOCKS5 代理端口 |
+| `port` | 7893 | HTTP 代理端口 |
+| `socks-port` | 7894 | SOCKS5 代理端口 |
 | `allow-lan` | true | 是否允许局域网设备使用代理 |
 | `mode` | rule | 代理模式：rule / global / direct |
 | `log-level` | info | 日志级别：silent / info / warning / error / debug |
-| `external-controller` | 127.0.0.1:9090 | Dashboard API 监听地址 |
+| `external-controller` | 127.0.0.1:9091 | Dashboard API 监听地址 |
 
 修改后重启生效：
 
@@ -140,7 +140,7 @@ bash shutdown.sh && bash start.sh
 
 **Q: 服务启动成功但代理不通？**
 
-1. 检查端口是否在监听：`ss -tln | grep -E '9090|789.'`
+1. 检查端口是否在监听：`ss -tln | grep -E '9091|789.'`
 2. 检查日志：`tail -f logs/clash.log`
 3. 确认订阅地址有效且节点可用
 

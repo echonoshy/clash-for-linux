@@ -67,18 +67,21 @@ fi
 ## 清除可能残留的代理环境变量，避免干扰订阅下载
 unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
+## 订阅请求使用的 UA（部分机场会按 UA 白名单过滤，clash.meta 兼容性最好）
+SUB_UA="clash.meta"
+
 ## 检测订阅地址
 echo -e '\n正在检测订阅地址...'
-curl -o /dev/null -L -k -sS --retry 5 -m 10 --connect-timeout 10 -w "%{http_code}" $URL | grep -E '^[23][0-9]{2}$' &>/dev/null
+curl -o /dev/null -L -k -sS --retry 5 -m 10 --connect-timeout 10 -A "$SUB_UA" -w "%{http_code}" $URL | grep -E '^[23][0-9]{2}$' &>/dev/null
 if_success "订阅地址可访问！" "订阅地址不可访问！" $?
 
 ## 下载订阅配置（使用 clash-meta UA 获取 mihomo 兼容的完整配置）
 echo -e '\n正在下载配置文件...'
-curl -L -k -sS --retry 5 -m 30 -A "mihomo/1.19.21" -o $Temp_Dir/clash.yaml $URL
+curl -L -k -sS --retry 5 -m 30 -A "$SUB_UA" -o $Temp_Dir/clash.yaml $URL
 ReturnStatus=$?
 if [ $ReturnStatus -ne 0 ]; then
 	for i in {1..10}; do
-		wget -q --no-check-certificate -U "mihomo/1.19.21" -O $Temp_Dir/clash.yaml $URL
+		wget -q --no-check-certificate -U "$SUB_UA" -O $Temp_Dir/clash.yaml $URL
 		ReturnStatus=$?
 		[ $ReturnStatus -eq 0 ] && break
 	done
@@ -119,7 +122,7 @@ if_success "服务启动成功！" "服务启动失败！" $ReturnStatus
 
 ## 输出访问信息
 echo ''
-echo -e "Clash Dashboard 访问地址: http://<ip>:9090/ui"
+echo -e "Clash Dashboard 访问地址: http://<ip>:9091/ui"
 echo -e "Secret: ${Secret}"
 echo ''
 
@@ -128,11 +131,11 @@ ENV_FILE="$HOME/.clash_proxy_env.sh"
 
 cat>"$ENV_FILE"<<'EOF'
 function proxy_on() {
-	export http_proxy=http://127.0.0.1:7890
-	export https_proxy=http://127.0.0.1:7890
+	export http_proxy=http://127.0.0.1:7893
+	export https_proxy=http://127.0.0.1:7893
 	export no_proxy=127.0.0.1,localhost
-	export HTTP_PROXY=http://127.0.0.1:7890
-	export HTTPS_PROXY=http://127.0.0.1:7890
+	export HTTP_PROXY=http://127.0.0.1:7893
+	export HTTPS_PROXY=http://127.0.0.1:7893
 	export NO_PROXY=127.0.0.1,localhost
 	echo -e "\033[32m[√] 已开启代理\033[0m"
 }
