@@ -1,22 +1,15 @@
 #!/bin/bash
 
 Server_Dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
-Temp_Dir="$Server_Dir/temp"
-PID_FILE="$Temp_Dir/clash.pid"
+Conf_Dir="$Server_Dir/conf"
 
-## 关闭 mihomo 进程
-if [ -f "$PID_FILE" ]; then
-	PID=$(cat "$PID_FILE" 2>/dev/null)
-	if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-		kill "$PID" 2>/dev/null || true
-		sleep 1
-		if kill -0 "$PID" 2>/dev/null; then
-			kill -9 "$PID" 2>/dev/null || true
-		fi
-	fi
-	rm -f "$PID_FILE" 2>/dev/null || true
-else
-	echo "未找到 PID 文件，若需要可手动检查进程：pgrep -fa clash-linux" >&2
+source "$Server_Dir/scripts/stop_mihomo.sh"
+
+## 关闭本目录下所有 mihomo 进程（按 conf 路径匹配，不影响其他安装）
+stop_project_mihomo "$Server_Dir"
+remaining=$(pgrep -f " -d ${Conf_Dir}( |$)" 2>/dev/null | wc -l)
+if [ "$remaining" -gt 0 ]; then
+	echo "警告：仍有 ${remaining} 个 mihomo 进程未退出，请检查：pgrep -fa \" -d ${Conf_Dir}\"" >&2
 fi
 
 ## 清空代理环境函数文件
